@@ -60,7 +60,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('مسح رمز QR/الباركود'),
+        title: const Text('مسح الحضور'),
         actions: [
           IconButton(
             icon: const Icon(Icons.info_outline),
@@ -86,27 +86,57 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
 
           return Column(
             children: [
-              // Session info banner
+              // Session banner with a live count of scanned students
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(12.0),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 color: Colors.green.shade700,
-                child: Column(
+                child: Row(
                   children: [
-                    Text(
-                      session.courseName,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            session.displayName,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            session.courseName,
+                            style: TextStyle(
+                              color: Colors.white.withAlpha(220),
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'جلسة نشطة',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.9),
-                        fontSize: 14,
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withAlpha(40),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.how_to_reg,
+                              color: Colors.white, size: 18),
+                          const SizedBox(width: 6),
+                          Text(
+                            '${ref.watch(attendanceRecordsProvider).value?.length ?? 0} حاضر',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -167,34 +197,43 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
               ),
 
               // Controls
-              Container(
-                padding: const EdgeInsets.all(16.0),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 4,
-                      offset: const Offset(0, -2),
+              SafeArea(
+                top: false,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    border: Border(
+                      top: BorderSide(
+                        color: Theme.of(context).colorScheme.outlineVariant,
+                      ),
                     ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.flash_on),
-                      onPressed: () => _controller.toggleTorch(),
-                      tooltip: 'تشغيل/إيقاف الفلاش',
-                      iconSize: 32,
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.cameraswitch),
-                      onPressed: () => _controller.switchCamera(),
-                      tooltip: 'تبديل الكاميرا',
-                      iconSize: 32,
-                    ),
-                  ],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      // Icon follows the real torch state
+                      ValueListenableBuilder<MobileScannerState>(
+                        valueListenable: _controller,
+                        builder: (context, state, child) {
+                          final isOn = state.torchState == TorchState.on;
+                          return _ControlButton(
+                            icon: isOn ? Icons.flash_on : Icons.flash_off,
+                            label: isOn ? 'إطفاء الفلاش' : 'الفلاش',
+                            highlighted: isOn,
+                            onPressed: state.torchState == TorchState.unavailable
+                                ? null
+                                : () => _controller.toggleTorch(),
+                          );
+                        },
+                      ),
+                      _ControlButton(
+                        icon: Icons.cameraswitch_outlined,
+                        label: 'تبديل الكاميرا',
+                        onPressed: () => _controller.switchCamera(),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -363,6 +402,43 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Labelled round button for the scanner's bottom controls
+class _ControlButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+  final bool highlighted;
+
+  const _ControlButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    this.highlighted = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton.filledTonal(
+          icon: Icon(icon),
+          iconSize: 28,
+          onPressed: onPressed,
+          style: highlighted
+              ? IconButton.styleFrom(
+                  backgroundColor: Colors.amber,
+                  foregroundColor: Colors.black,
+                )
+              : null,
+        ),
+        const SizedBox(height: 4),
+        Text(label, style: const TextStyle(fontSize: 12)),
+      ],
     );
   }
 }

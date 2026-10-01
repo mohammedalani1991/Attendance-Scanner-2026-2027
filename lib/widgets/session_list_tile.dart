@@ -19,33 +19,59 @@ class SessionListTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).colorScheme;
+
     return Dismissible(
       key: ValueKey('session_${session.id}'),
       direction: DismissDirection.endToStart,
       background: Container(
         alignment: AlignmentDirectional.centerEnd,
         padding: const EdgeInsetsDirectional.only(end: 20.0),
-        color: Colors.red,
-        child: const Icon(
-          Icons.delete,
-          color: Colors.white,
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: colors.error,
+          borderRadius: BorderRadius.circular(12),
         ),
+        child: Icon(Icons.delete_outline, color: colors.onError),
       ),
       confirmDismiss: (direction) => _confirmDelete(context),
       onDismissed: (direction) => _deleteSession(context, ref),
       child: Card(
+        clipBehavior: Clip.antiAlias,
+        shape: session.isActive
+            ? RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: const BorderSide(color: Colors.green, width: 2),
+              )
+            : null,
         child: ListTile(
-          leading: Icon(
-            session.isActive ? Icons.circle : Icons.check_circle,
-            color: session.isActive ? Colors.green : Colors.grey,
+          leading: CircleAvatar(
+            backgroundColor: session.isActive
+                ? Colors.green.withAlpha(35)
+                : colors.surfaceContainerHighest,
+            child: Icon(
+              session.isActive ? Icons.play_arrow : Icons.check,
+              color: session.isActive ? Colors.green : colors.onSurfaceVariant,
+            ),
           ),
-          title: Text(session.displayName),
+          title: Text(
+            session.displayName,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
           subtitle: Text(
             showSubject
                 ? '${session.courseName} • ${formatSessionDateTime(session.timestampStart)}'
                 : formatSessionDateTime(session.timestampStart),
           ),
-          trailing: const Icon(Icons.chevron_right),
+          trailing: session.isActive
+              ? const Text(
+                  'نشطة',
+                  style: TextStyle(
+                    color: Colors.green,
+                    fontWeight: FontWeight.bold,
+                  ),
+                )
+              : Icon(Icons.chevron_right, color: colors.onSurfaceVariant),
           onTap: () => _openDetails(context, ref),
         ),
       ),

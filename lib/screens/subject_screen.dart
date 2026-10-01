@@ -9,6 +9,167 @@ import '../widgets/session_list_tile.dart';
 import '../widgets/subject_form_dialog.dart';
 import 'scanner_screen.dart';
 
+/// Subject summary: coloured initial, name, code and session counts
+class _SubjectHeader extends StatelessWidget {
+  final Subject subject;
+  final List<Session> sessions; // Newest first
+  final bool blockedByOtherSession;
+
+  const _SubjectHeader({
+    required this.subject,
+    required this.sessions,
+    required this.blockedByOtherSession,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    // Same colour as the subject's card on the home screen
+    final accent = Colors.primaries[(subject.id ?? 0) % Colors.primaries.length];
+    final initial = subject.name.trim().isEmpty ? '?' : subject.name.trim()[0];
+    final lastDate = sessions.isEmpty
+        ? '—'
+        : formatSessionDateTime(sessions.first.timestampStart).split(' ').first;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            CircleAvatar(
+              radius: 30,
+              backgroundColor: accent.withAlpha(40),
+              child: Text(
+                initial,
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  color: accent.shade700,
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    subject.name,
+                    style: textTheme.headlineSmall
+                        ?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  if (subject.code != null)
+                    Text(
+                      subject.code!,
+                      style: textTheme.bodyMedium
+                          ?.copyWith(color: colors.onSurfaceVariant),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Card(
+          margin: EdgeInsets.zero,
+          color: colors.surfaceContainerHighest,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Row(
+              children: [
+                _HeaderStat(label: 'الجلسات', value: '${sessions.length}'),
+                SizedBox(
+                  height: 32,
+                  child: VerticalDivider(color: colors.outlineVariant),
+                ),
+                _HeaderStat(label: 'آخر جلسة', value: lastDate),
+              ],
+            ),
+          ),
+        ),
+        // Explain why "start session" will be refused
+        if (blockedByOtherSession) ...[
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Icon(Icons.info_outline, size: 18, color: colors.onSurfaceVariant),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'توجد جلسة نشطة في مادة أخرى. أنهِها أولاً لبدء جلسة هنا.',
+                  style: TextStyle(color: colors.onSurfaceVariant),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _HeaderStat extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _HeaderStat({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shown before the subject's first session
+class _EmptySessions extends StatelessWidget {
+  const _EmptySessions();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 32),
+      child: Column(
+        children: [
+          Icon(Icons.event_available_outlined, size: 64, color: colors.outline),
+          const SizedBox(height: 16),
+          Text(
+            'لا توجد جلسات بعد',
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'اضغط "بدء جلسة" لإنشاء أول جلسة وبدء تسجيل الحضور.',
+            style: TextStyle(color: colors.onSurfaceVariant),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Screen for one subject: its sessions and starting a new one
 class SubjectScreen extends ConsumerWidget {
   final int subjectId;
@@ -36,10 +197,9 @@ class SubjectScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(subject.name),
         actions: [
           IconButton(
-            icon: const Icon(Icons.file_download),
+            icon: const Icon(Icons.file_download_outlined),
             tooltip: 'تصدير الحضور',
             onPressed: subjectSessions.isEmpty
                 ? null
@@ -57,14 +217,14 @@ class SubjectScreen extends ConsumerWidget {
               PopupMenuItem(
                 value: 'edit',
                 child: ListTile(
-                  leading: Icon(Icons.edit),
+                  leading: Icon(Icons.edit_outlined),
                   title: Text('تعديل المادة'),
                 ),
               ),
               PopupMenuItem(
                 value: 'delete',
                 child: ListTile(
-                  leading: Icon(Icons.delete, color: Colors.red),
+                  leading: Icon(Icons.delete_outline, color: Colors.red),
                   title: Text('حذف المادة', style: TextStyle(color: Colors.red)),
                 ),
               ),
@@ -78,42 +238,24 @@ class SubjectScreen extends ConsumerWidget {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
           children: [
-            // Subject summary
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.menu_book, size: 36),
-                title: Text(
-                  subject.name,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                subtitle: Text(
-                  [
-                    if (subject.code != null) subject.code!,
-                    '${subjectSessions.length} جلسة',
-                  ].join(' • '),
-                ),
-              ),
+            _SubjectHeader(
+              subject: subject,
+              sessions: subjectSessions,
+              blockedByOtherSession: activeSession != null && !isActiveHere,
             ),
-            const SizedBox(height: 16),
-            const Text(
+            const SizedBox(height: 24),
+            Text(
               'الجلسات',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
             if (sessions.isLoading && sessions.value == null)
               const Center(child: CircularProgressIndicator())
             else if (subjectSessions.isEmpty)
-              const Card(
-                child: Padding(
-                  padding: EdgeInsets.all(24.0),
-                  child: Center(
-                    child: Text(
-                      'لا توجد جلسات لهذه المادة بعد.\nاضغط "بدء جلسة" لإنشاء أول جلسة.',
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ),
-              )
+              const _EmptySessions()
             else
               ...subjectSessions.map(
                 (session) => SessionListTile(

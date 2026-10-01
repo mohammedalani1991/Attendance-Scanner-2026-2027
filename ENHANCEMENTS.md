@@ -299,7 +299,8 @@ Student photos on the success dialog, an NFC card option, optional password-prot
 
 ## 4. UI / UX
 
-### 4.1 Mixed Arabic and English
+### 4.1 Mixed Arabic and English 🟡
+**Status:** 🟡 all screens, dialogs, and scan and import messages are now in Arabic. Still to do: move the strings into ARB files (`flutter gen-l10n`) for proper localization.
 The app locale is Arabic (RTL), but large parts of the UI are in English:
 - All of [import_students_screen.dart](lib/screens/import_students_screen.dart)
 - Most labels in [session_detail_screen.dart](lib/screens/session_detail_screen.dart) ("Attendance List", "Present", "Date", "ACTIVE SESSION"…)
@@ -307,10 +308,19 @@ The app locale is Arabic (RTL), but large parts of the UI are in English:
 
 **Suggestion:** Move every string into ARB files with `flutter_localizations` + `intl` (`flutter gen-l10n`). Translate them all to Arabic, and keep English as a second locale if wanted. Services should return error *codes*, and the UI should map them to localized text.
 
-### 4.2 Dark mode is half-supported
+### 4.2 Dark mode is half-supported ✅
+**Status:** ✅ one shared theme for light and dark (`_buildTheme` in [main.dart](lib/main.dart)): flat outlined cards, rounded buttons and fields, and floating snackbars. Screens use `colorScheme` roles instead of hard-coded white and grey.
 `darkTheme` is defined, but many widgets hard-code `Colors.white`, `Colors.green.shade50` and `Colors.grey.shade700` (scanner control bar, import action bar, active-session card). These look wrong in dark mode. Use `Theme.of(context).colorScheme` roles (`surface`, `primaryContainer`, `onSurfaceVariant`, etc.). Also replace the deprecated `withOpacity` with `withValues(alpha: …)`.
 
-### 4.3 Scanner screen polish
+### 4.3 Scanner screen polish 🟡
+**Status:** 🟡 partly done.
+- ✅ **Done:**
+  - Non-modal feedback.
+  - The torch icon follows the real state and is disabled when the device has no torch.
+  - The banner shows the session name and a live present count.
+  - The control bar is theme-aware.
+  - The info text is generated from the constants.
+- ⏳ **Still open:** `scanWindow`, a mute setting, and a permission error screen.
 - Show a clear camera permission prompt or error with an "Open Settings" button (`MobileScanner`'s `errorBuilder`), using the fixed helper from 1.1.
 - Replace the blocking `showDialog` feedback with a non-modal overlay or banner. The camera keeps working underneath and fast queues of students move quicker.
 - Show the torch state (on/off icon), and hide the torch button on devices without a flash.
@@ -330,7 +340,13 @@ The app locale is Arabic (RTL), but large parts of the UI are in English:
 - Dispose the `TextEditingController`s created in `_showStartSessionDialog`, or move the dialog into its own `StatefulWidget`.
 - Suggest recent course names in the start-session dialog (autocomplete).
 
-### 4.5 Session detail screen
+### 4.5 Session detail screen ✅
+**Status:** ✅ redesigned.
+- Status chip, an editable name, and an info grid (date, duration, start, end).
+- Pull-to-refresh replaces the refresh button.
+- Export, rename and delete are in the menu.
+- The floating button changes with the session: **scan** while it is active, **export** once it has ended.
+- The attendee list shows real student numbers and supports search when it has more than 8 entries.
 - Auto-refresh while the session is active: watch `attendanceRecordsProvider`, or poll or stream.
 - Add search within the attendee list.
 - Use one date-format style consistently (the home screen uses a manual `d/m/yyyy`, while detail uses `MMM dd, yyyy` in English).

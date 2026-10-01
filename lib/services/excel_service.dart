@@ -39,7 +39,7 @@ class ExcelService {
         return ImportResult(
           success: false,
           students: [],
-          errors: ['Excel file is empty'],
+          errors: ['ملف Excel فارغ'],
           duplicates: {},
         );
       }
@@ -51,7 +51,7 @@ class ExcelService {
         return ImportResult(
           success: false,
           students: [],
-          errors: ['Sheet is empty'],
+          errors: ['الورقة الأولى في الملف فارغة'],
           duplicates: {},
         );
       }
@@ -65,7 +65,7 @@ class ExcelService {
         return ImportResult(
           success: false,
           students: [],
-          errors: ['Missing required column: ${AppConstants.excelColCodeValue}'],
+          errors: ['عمود إلزامي مفقود: ${AppConstants.excelColCodeValue}'],
           duplicates: {},
         );
       }
@@ -74,7 +74,7 @@ class ExcelService {
         return ImportResult(
           success: false,
           students: [],
-          errors: ['Missing required column: ${AppConstants.excelColStudentName}'],
+          errors: ['عمود إلزامي مفقود: ${AppConstants.excelColStudentName}'],
           duplicates: {},
         );
       }
@@ -115,19 +115,19 @@ class ExcelService {
         final rowErrors = <String>[];
 
         if (Validators.validateStudentName(studentName) != null) {
-          rowErrors.add('Row $rowNum: Invalid student name');
+          rowErrors.add('الصف $rowNum: اسم الطالب غير صالح');
         }
 
         if (Validators.validateCodeValue(codeValue) != null) {
-          rowErrors.add('Row $rowNum: Invalid code value');
+          rowErrors.add('الصف $rowNum: قيمة الرمز (code_value) فارغة');
         }
 
         if (codeType != null && Validators.validateCodeType(codeType) != null) {
-          rowErrors.add('Row $rowNum: Invalid code type (must be "qr" or "barcode")');
+          rowErrors.add('الصف $rowNum: نوع الرمز يجب أن يكون qr أو barcode');
         }
 
         if (studentId != null && Validators.validateStudentId(studentId) != null) {
-          rowErrors.add('Row $rowNum: Student ID must be numeric');
+          rowErrors.add('الصف $rowNum: رقم الطالب يجب أن يكون أرقاماً فقط');
         }
 
         if (rowErrors.isNotEmpty) {
@@ -163,7 +163,7 @@ class ExcelService {
       return ImportResult(
         success: false,
         students: [],
-        errors: ['Failed to import Excel file: $e'],
+        errors: ['تعذر قراءة ملف Excel: $e'],
         duplicates: {},
       );
     }

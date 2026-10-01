@@ -1,0 +1,77 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:  # Allows manual trigger from GitHub Actions tab
+
+jobs:
+  build-apk:
+    name: Build APK
+    runs-on: ubuntu-latest
+    env:
+      GRADLE_OPTS: -Xmx4096m -XX:MaxMetaspaceSize=512m -Dorg.gradle.jvmargs="-Xmx4096m -XX:MaxMetaspaceSize=512m"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.35.7'
+          channel: 'stable'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Configure Gradle for CI (increase memory, disable Jetifier)
+        run: |
+          cat >> android/gradle.properties << EOF
+          org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8
+          android.enableJetifier=false
+          EOF
+
+      - name: Run tests (optional)
+        run: |
+          if [ -d "test" ]; then
+            flutter test
+          else
+            echo "No test directory found. Skipping tests."
+          fi
+        continue-on-error: true
+
+      - name: Build APK (Debug)
+        run: flutter build apk --debug
+
+      - name: Build APK (Release)
+        run: flutter build apk --release
+
+      - name: Build APK (Split per ABI - optimized size)
+        run: flutter build apk --split-per-abi --release
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: attendance-scanner-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: attendance-scanner-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Upload Split APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: attendance-scanner-split-apks
+          path: build/app/outputs/flutter-apk/app-*-release.apk

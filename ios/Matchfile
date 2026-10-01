@@ -1,0 +1,5 @@
+git_url("https://github.com/mohammedalani1991/flutter-attendance-scanner-certificates")
+storage_mode("git")
+type("appstore")
+app_identifier(["com.almaarif.attendancescanner"])
+username("mohammedalani1991@gmail.com")

@@ -1,0 +1,61 @@
+name: Build iOS IPA
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:  # Allows manual trigger from GitHub Actions tab
+
+jobs:
+  build-ios:
+    name: Build IPA
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.35.7'
+          channel: 'stable'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run tests (optional)
+        run: |
+          if [ -d "test" ]; then
+            flutter test
+          else
+            echo "No test directory found. Skipping tests."
+          fi
+        continue-on-error: true
+
+      - name: Build iOS (no codesign)
+        run: flutter build ios --release --no-codesign
+
+      - name: Create IPA archive
+        run: |
+          cd build/ios/iphoneos
+          mkdir -p Payload
+          cp -r Runner.app Payload/
+          zip -r attendance-scanner.ipa Payload
+          cd ../../..
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: attendance-scanner-ios-ipa
+          path: build/ios/iphoneos/attendance-scanner.ipa
+
+      - name: Build Info
+        run: |
+          echo "IPA built successfully!"
+          echo "Note: This IPA is unsigned and cannot be installed directly on devices."
+          echo "For App Store distribution, you need to:"
+          echo "  1. Sign the IPA with a valid Apple Developer certificate"
+          echo "  2. Use Xcode for proper provisioning and signing"
+          echo "  3. Or use fastlane for automated deployment"

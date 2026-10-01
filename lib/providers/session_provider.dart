@@ -50,11 +50,13 @@ class ActiveSessionNotifier extends StateNotifier<AsyncValue<Session?>> {
   /// Start a new session under a subject (the result carries the error message on failure)
   Future<SessionOperationResult> startSession({
     required Subject subject,
+    required String title,
     String? notes,
   }) async {
     try {
       final result = await _sessionService.startSession(
         subject: subject,
+        title: title,
         notes: notes,
       );
       if (result.success) {

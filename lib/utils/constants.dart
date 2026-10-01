@@ -3,7 +3,8 @@ class AppConstants {
   // Database
   static const String databaseName = 'attendance_scanner.db';
   // v2: subjects table, sessions.subject_id
-  static const int databaseVersion = 2;
+  // v3: sessions.title (session name typed by the user)
+  static const int databaseVersion = 3;
 
   // Table names
   static const String subjectsTable = 'subjects';
@@ -22,8 +23,22 @@ class AppConstants {
     final formattedDate =
         '${dateTime.year}${_pad(dateTime.month)}${_pad(dateTime.day)}_'
         '${_pad(dateTime.hour)}${_pad(dateTime.minute)}';
-    final sanitizedCourse = courseName.replaceAll(RegExp(r'[^\w\s-]'), '').replaceAll(' ', '_');
-    return 'Attendance_${sanitizedCourse}_$formattedDate.xlsx';
+    return 'Attendance_${_sanitizeFileName(courseName)}_$formattedDate.xlsx';
+  }
+
+  // Subject export file name: Attendance_<subject>_All_<YYYYMMDD>.xlsx
+  static String getSubjectExportFileName(String subjectName, DateTime dateTime) {
+    final formattedDate =
+        '${dateTime.year}${_pad(dateTime.month)}${_pad(dateTime.day)}';
+    return 'Attendance_${_sanitizeFileName(subjectName)}_All_$formattedDate.xlsx';
+  }
+
+  // Remove only characters that file systems reject, so Arabic names survive
+  static String _sanitizeFileName(String name) {
+    return name
+        .trim()
+        .replaceAll(RegExp(r'[\\/:*?"<>|]'), '')
+        .replaceAll(RegExp(r'\s+'), '_');
   }
 
   static String _pad(int value) => value.toString().padLeft(2, '0');

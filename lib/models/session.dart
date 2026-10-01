@@ -2,6 +2,7 @@
 class Session {
   final int? id; // Auto-increment primary key
   final int? subjectId; // Foreign key to subjects table
+  final String? title; // Session name typed by the user (null for older sessions)
   final String courseName; // Copy of the subject name, used in exports
   final DateTime timestampStart;
   final DateTime? timestampEnd; // Null if session is ongoing
@@ -11,6 +12,7 @@ class Session {
   Session({
     this.id,
     this.subjectId,
+    this.title,
     required this.courseName,
     DateTime? timestampStart,
     this.timestampEnd,
@@ -21,6 +23,13 @@ class Session {
 
   /// Check if session is active (not ended)
   bool get isActive => timestampEnd == null;
+
+  /// Name to show: the user's title, or the start date for unnamed sessions
+  String get displayName {
+    final name = title?.trim();
+    if (name != null && name.isNotEmpty) return name;
+    return '${timestampStart.day}/${timestampStart.month}/${timestampStart.year}';
+  }
 
   /// Get session duration
   Duration get duration {
@@ -33,6 +42,7 @@ class Session {
     return {
       'id': id,
       'subject_id': subjectId,
+      'title': title,
       'course_name': courseName,
       'timestamp_start': timestampStart.toIso8601String(),
       'timestamp_end': timestampEnd?.toIso8601String(),
@@ -46,6 +56,7 @@ class Session {
     return Session(
       id: map['id'] as int?,
       subjectId: map['subject_id'] as int?,
+      title: map['title'] as String?,
       courseName: map['course_name'] as String,
       timestampStart: DateTime.parse(map['timestamp_start'] as String),
       timestampEnd: map['timestamp_end'] != null
@@ -60,6 +71,7 @@ class Session {
   Session copyWith({
     int? id,
     int? subjectId,
+    String? title,
     String? courseName,
     DateTime? timestampStart,
     DateTime? timestampEnd,
@@ -69,6 +81,7 @@ class Session {
     return Session(
       id: id ?? this.id,
       subjectId: subjectId ?? this.subjectId,
+      title: title ?? this.title,
       courseName: courseName ?? this.courseName,
       timestampStart: timestampStart ?? this.timestampStart,
       timestampEnd: timestampEnd ?? this.timestampEnd,
@@ -94,6 +107,7 @@ class Session {
     return other is Session &&
         other.id == id &&
         other.subjectId == subjectId &&
+        other.title == title &&
         other.courseName == courseName &&
         other.timestampStart == timestampStart &&
         other.timestampEnd == timestampEnd &&

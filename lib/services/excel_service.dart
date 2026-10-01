@@ -3,6 +3,7 @@ import 'package:excel/excel.dart';
 import 'package:path_provider/path_provider.dart';
 import '../models/student.dart';
 import '../models/session.dart';
+import '../models/subject.dart';
 import '../models/attendance_record.dart';
 import '../utils/constants.dart';
 import '../utils/validators.dart';
@@ -188,6 +189,10 @@ class ExcelService {
         TextCellValue(session.courseName),
       ]);
       sheet.appendRow([
+        TextCellValue('الجلسة:'),
+        TextCellValue(session.displayName),
+      ]);
+      sheet.appendRow([
         TextCellValue('بداية الجلسة:'),
         TextCellValue(session.timestampStart.toString()),
       ]);
@@ -229,26 +234,190 @@ class ExcelService {
         ]);
       }
 
-      // Get temporary directory to save file
-      final directory = await getApplicationDocumentsDirectory();
-      final fileName = AppConstants.getExportFileName(
-        session.courseName,
-        session.timestampStart,
+      return await _saveExcel(
+        excel,
+        AppConstants.getExportFileName(
+          session.courseName,
+          session.timestampStart,
+        ),
       );
-      final filePath = '${directory.path}/$fileName';
-
-      // Save Excel file
-      final fileBytes = excel.encode();
-      if (fileBytes != null) {
-        final file = File(filePath);
-        await file.writeAsBytes(fileBytes);
-        return filePath;
-      } else {
-        throw Exception('Failed to encode Excel file');
-      }
     } catch (e) {
       throw Exception('Failed to export attendance: $e');
     }
+  }
+
+  /// Export all sessions of a subject to one sheet:
+  /// one row per student, one column per session (✓ / ✗), plus totals
+  Future<String> exportSubjectAttendanceToExcel({
+    required Subject subject,
+    required List<Session> sessions,
+    required List<AttendanceRecord> records,
+    required Map<int, Student> studentsById,
+  }) async {
+    try {
+      final excel = Excel.createExcel();
+      excel.delete('Sheet1');
+
+      const sheetName = 'حضور المادة';
+      final sheet = excel[sheetName];
+      excel.setDefaultSheet(sheetName);
+      sheet.isRTL = true;
+
+      // Sessions left to right from oldest to newest
+      final orderedSessions = [...sessions]
+        ..sort((a, b) => a.timestampStart.compareTo(b.timestampStart));
+      final sessionCount = orderedSessions.length;
+
+      // session id -> ids of students present in it
+      final presentBySession = <int, Set<int>>{};
+      // Rows: every student who attended at least one session
+      final studentNames = <int, String>{};
+      for (final record in records) {
+        presentBySession
+            .putIfAbsent(record.sessionId, () => <int>{})
+            .add(record.studentId);
+        studentNames[record.studentId] =
+            studentsById[record.studentId]?.studentName ?? record.studentName;
+      }
+      final studentIds = studentNames.keys.toList()
+        ..sort((a, b) => studentNames[a]!.compareTo(studentNames[b]!));
+
+      final boldStyle = CellStyle(bold: true);
+      final headerStyle = CellStyle(
+        bold: true,
+        horizontalAlign: HorizontalAlign.Center,
+        backgroundColorHex: ExcelColor.fromHexString('#FFE3F2FD'),
+      );
+      final centerStyle = CellStyle(horizontalAlign: HorizontalAlign.Center);
+      final presentStyle = CellStyle(
+        bold: true,
+        horizontalAlign: HorizontalAlign.Center,
+        fontColorHex: ExcelColor.fromHexString('#FF2E7D32'),
+      );
+      final absentStyle = CellStyle(
+        horizontalAlign: HorizontalAlign.Center,
+        fontColorHex: ExcelColor.fromHexString('#FFC62828'),
+      );
+
+      void put(int column, int row, CellValue value, [CellStyle? style]) {
+        sheet.updateCell(
+          CellIndex.indexByColumnRow(columnIndex: column, rowIndex: row),
+          value,
+          cellStyle: style,
+        );
+      }
+
+      // Subject metadata
+      var row = 0;
+      put(0, row, TextCellValue('المادة:'), boldStyle);
+      put(1, row, TextCellValue(
+          subject.code == null ? subject.name : '${subject.name} (${subject.code})'));
+      row++;
+      put(0, row, TextCellValue('عدد الجلسات:'), boldStyle);
+      put(1, row, IntCellValue(sessionCount));
+      row++;
+      put(0, row, TextCellValue('عدد الطلاب:'), boldStyle);
+      put(1, row, IntCellValue(studentIds.length));
+      row++;
+      put(0, row, TextCellValue('تاريخ التصدير:'), boldStyle);
+      put(1, row, TextCellValue(_formatDate(DateTime.now())));
+      row += 2;
+
+      const firstSessionColumn = 3;
+      final countColumn = firstSessionColumn + sessionCount;
+      final rateColumn = countColumn + 1;
+
+      // Header: session names typed by the user
+      put(0, row, TextCellValue('#'), headerStyle);
+      put(1, row, TextCellValue('رقم الطالب'), headerStyle);
+      put(2, row, TextCellValue('اسم الطالب'), headerStyle);
+      for (var i = 0; i < sessionCount; i++) {
+        put(firstSessionColumn + i, row,
+            TextCellValue(orderedSessions[i].displayName), headerStyle);
+      }
+      put(countColumn, row, TextCellValue('عدد الحضور'), headerStyle);
+      put(rateColumn, row, TextCellValue('نسبة الحضور'), headerStyle);
+      row++;
+
+      // Dates under the names, so sessions with the same name stay distinct
+      put(2, row, TextCellValue('التاريخ'), boldStyle);
+      for (var i = 0; i < sessionCount; i++) {
+        put(firstSessionColumn + i, row,
+            TextCellValue(_formatDate(orderedSessions[i].timestampStart)),
+            centerStyle);
+      }
+      row++;
+
+      // One row per student
+      for (var index = 0; index < studentIds.length; index++) {
+        final studentId = studentIds[index];
+        put(0, row, IntCellValue(index + 1), centerStyle);
+        put(1, row,
+            TextCellValue(studentsById[studentId]?.studentId ?? ''), centerStyle);
+        put(2, row, TextCellValue(studentNames[studentId]!));
+
+        var presentCount = 0;
+        for (var i = 0; i < sessionCount; i++) {
+          final isPresent =
+              presentBySession[orderedSessions[i].id]?.contains(studentId) ??
+                  false;
+          if (isPresent) presentCount++;
+          put(firstSessionColumn + i, row, TextCellValue(isPresent ? '✓' : '✗'),
+              isPresent ? presentStyle : absentStyle);
+        }
+
+        put(countColumn, row, TextCellValue('$presentCount/$sessionCount'),
+            centerStyle);
+        put(rateColumn, row,
+            TextCellValue('${(presentCount * 100 / sessionCount).round()}%'),
+            centerStyle);
+        row++;
+      }
+
+      // Present count per session
+      put(2, row, TextCellValue('عدد الحاضرين'), headerStyle);
+      for (var i = 0; i < sessionCount; i++) {
+        put(firstSessionColumn + i, row,
+            IntCellValue(presentBySession[orderedSessions[i].id]?.length ?? 0),
+            headerStyle);
+      }
+
+      // Column widths
+      sheet.setColumnWidth(0, 6);
+      sheet.setColumnWidth(1, 14);
+      sheet.setColumnWidth(2, 28);
+      for (var i = 0; i < sessionCount; i++) {
+        sheet.setColumnWidth(firstSessionColumn + i, 14);
+      }
+      sheet.setColumnWidth(countColumn, 12);
+      sheet.setColumnWidth(rateColumn, 12);
+
+      return await _saveExcel(
+        excel,
+        AppConstants.getSubjectExportFileName(subject.name, DateTime.now()),
+      );
+    } catch (e) {
+      throw Exception('Failed to export subject attendance: $e');
+    }
+  }
+
+  /// Save a workbook to the app documents folder and return its path
+  Future<String> _saveExcel(Excel excel, String fileName) async {
+    final directory = await getApplicationDocumentsDirectory();
+    final filePath = '${directory.path}/$fileName';
+
+    final fileBytes = excel.encode();
+    if (fileBytes == null) {
+      throw Exception('Failed to encode Excel file');
+    }
+    await File(filePath).writeAsBytes(fileBytes);
+    return filePath;
+  }
+
+  /// Format a date as yyyy/MM/dd
+  String _formatDate(DateTime dateTime) {
+    return '${dateTime.year}/${dateTime.month.toString().padLeft(2, '0')}/'
+        '${dateTime.day.toString().padLeft(2, '0')}';
   }
 
   /// Create a sample Excel file for import template

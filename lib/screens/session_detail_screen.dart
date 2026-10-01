@@ -177,11 +177,30 @@ class _SessionDetailScreenState extends ConsumerState<SessionDetailScreen> {
               ],
             ),
             const SizedBox(height: 12),
+            // Session name (column header in the subject export) + rename
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    session.displayName,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.edit),
+                  tooltip: 'تعديل اسم الجلسة',
+                  onPressed: _renameSession,
+                ),
+              ],
+            ),
             Text(
               session.courseName,
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey.shade700,
               ),
             ),
             const SizedBox(height: 16),
@@ -419,13 +438,76 @@ class _SessionDetailScreenState extends ConsumerState<SessionDetailScreen> {
     }
   }
 
+  Future<void> _renameSession() async {
+    final controller = TextEditingController(text: _session!.title ?? '');
+    String? error;
+
+    final newTitle = await showDialog<String>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('تعديل اسم الجلسة'),
+          content: TextField(
+            controller: controller,
+            decoration: InputDecoration(
+              labelText: 'اسم الجلسة',
+              hintText: 'مثال: محاضرة 1',
+              errorText: error,
+            ),
+            autofocus: true,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('إلغاء'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final title = controller.text.trim();
+                if (title.isEmpty) {
+                  setDialogState(() => error = 'الرجاء إدخال اسم الجلسة');
+                  return;
+                }
+                Navigator.pop(context, title);
+              },
+              child: const Text('حفظ'),
+            ),
+          ],
+        ),
+      ),
+    );
+    controller.dispose();
+
+    if (newTitle == null || !mounted) return;
+
+    final success =
+        await _sessionService.renameSession(widget.sessionId, newTitle);
+    if (!mounted) return;
+
+    if (success) {
+      ref.read(sessionsProvider.notifier).loadSessions();
+      // The active session card on the home screen shows the name too
+      if (_session!.isActive) {
+        ref.read(activeSessionProvider.notifier).loadActiveSession();
+      }
+      await _loadSessionData();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('فشل تعديل اسم الجلسة'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   Future<void> _confirmResumeSession() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('استئناف الجلسة'),
         content: Text(
-          'هل تريد إعادة فتح جلسة "${_session!.courseName}"؟\n\n'
+          'هل تريد إعادة فتح جلسة "${_session!.displayName}"؟\n\n'
           'ستصبح الجلسة النشطة، ويمكنك متابعة مسح الحضور فيها. '
           'الطلاب المسجلون سابقاً يبقون مسجلين.',
         ),

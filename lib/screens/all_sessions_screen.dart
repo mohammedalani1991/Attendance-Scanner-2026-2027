@@ -56,7 +56,7 @@ class _AllSessionsScreenState extends ConsumerState<AllSessionsScreen> {
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: 'ابحث باسم المقرر',
+                hintText: 'ابحث باسم المادة أو الجلسة',
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _query.isEmpty
                     ? null
@@ -147,6 +147,7 @@ class _AllSessionsScreenState extends ConsumerState<AllSessionsScreen> {
           return SessionListTile(
             key: ValueKey('all_session_${session.id}'),
             session: session,
+            showSubject: true,
           );
         },
       ),
@@ -158,8 +159,10 @@ class _AllSessionsScreenState extends ConsumerState<AllSessionsScreen> {
     final range = _dateRange;
 
     return sessionList.where((session) {
+      // Match the subject name or the session name
       if (query.isNotEmpty &&
-          !session.courseName.toLowerCase().contains(query)) {
+          !session.courseName.toLowerCase().contains(query) &&
+          !session.displayName.toLowerCase().contains(query)) {
         return false;
       }
       if (range != null) {

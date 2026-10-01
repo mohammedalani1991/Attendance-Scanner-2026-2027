@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 import '../models/session.dart';
 import '../models/subject.dart';
 import '../providers/session_provider.dart';
@@ -37,6 +38,13 @@ class SubjectScreen extends ConsumerWidget {
       appBar: AppBar(
         title: Text(subject.name),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.file_download),
+            tooltip: 'تصدير الحضور',
+            onPressed: subjectSessions.isEmpty
+                ? null
+                : () => _exportSubject(context, ref, subject),
+          ),
           PopupMenuButton<String>(
             onSelected: (value) {
               if (value == 'edit') {
@@ -128,8 +136,8 @@ class SubjectScreen extends ConsumerWidget {
               label: const Text('مسح'),
             )
           : FloatingActionButton.extended(
-              onPressed: () =>
-                  _startSession(context, ref, subject, activeSession),
+              onPressed: () => _startSession(context, ref, subject,
+                  activeSession, subjectSessions.length),
               icon: const Icon(Icons.play_arrow),
               label: const Text('بدء جلسة'),
             ),
@@ -148,6 +156,7 @@ class SubjectScreen extends ConsumerWidget {
     WidgetRef ref,
     Subject subject,
     Session? activeSession,
+    int existingSessionCount,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
 
@@ -165,39 +174,69 @@ class SubjectScreen extends ConsumerWidget {
       return;
     }
 
+    // The name becomes the column header in the subject export
+    final titleController =
+        TextEditingController(text: 'محاضرة ${existingSessionCount + 1}');
     final notesController = TextEditingController();
+    String? titleError;
+
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('بدء جلسة: ${subject.name}'),
-        content: TextField(
-          controller: notesController,
-          decoration: const InputDecoration(
-            labelText: 'ملاحظات (اختياري)',
-            hintText: 'مثال: اختبار نصفي',
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('بدء جلسة: ${subject.name}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: titleController,
+                decoration: InputDecoration(
+                  labelText: 'اسم الجلسة',
+                  hintText: 'مثال: محاضرة 1',
+                  errorText: titleError,
+                ),
+                autofocus: true,
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: notesController,
+                decoration: const InputDecoration(
+                  labelText: 'ملاحظات (اختياري)',
+                  hintText: 'مثال: اختبار نصفي',
+                ),
+                maxLines: 2,
+              ),
+            ],
           ),
-          maxLines: 2,
-          autofocus: true,
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('إلغاء'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (titleController.text.trim().isEmpty) {
+                  setDialogState(() => titleError = 'الرجاء إدخال اسم الجلسة');
+                  return;
+                }
+                Navigator.pop(context, true);
+              },
+              child: const Text('بدء'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('إلغاء'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('بدء'),
-          ),
-        ],
       ),
     );
+    final title = titleController.text.trim();
     final notes = notesController.text.trim();
+    titleController.dispose();
     notesController.dispose();
 
     if (confirmed != true) return;
 
     final result = await ref.read(activeSessionProvider.notifier).startSession(
           subject: subject,
+          title: title,
           notes: notes.isEmpty ? null : notes,
         );
 
@@ -210,6 +249,49 @@ class SubjectScreen extends ConsumerWidget {
       messenger.showSnackBar(
         SnackBar(
           content: Text(result.errorMessage ?? 'فشل بدء الجلسة'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _exportSubject(
+    BuildContext context,
+    WidgetRef ref,
+    Subject subject,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
+    // Blocking progress dialog while the file is built
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 20),
+            Expanded(child: Text('جاري تصدير حضور المادة...')),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final filePath = await ref
+          .read(sessionServiceProvider)
+          .exportSubjectAttendance(subject.id!);
+      navigator.pop();
+      await Share.shareXFiles(
+        [XFile(filePath)],
+        subject: 'Attendance - ${subject.name}',
+      );
+    } catch (e) {
+      navigator.pop();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('فشل التصدير: $e'),
           backgroundColor: Colors.red,
         ),
       );

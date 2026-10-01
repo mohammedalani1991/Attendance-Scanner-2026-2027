@@ -264,8 +264,22 @@ In `_upgradeDB` (`oldVersion < 2`), inside one transaction:
 ### 3.5 Student management screen
 Students can only be bulk-imported or all deleted. Add a searchable list with add, edit and delete for single students (the provider already supports `addStudent`, `updateStudent` and `deleteStudent`).
 
-### 3.6 Reports across sessions
+### 3.6 Reports across sessions 🟡
 Add a per-student attendance percentage across all sessions of a course, and a "students below X% attendance" list. Export a semester matrix: students × sessions, with a ✓/✗ grid.
+
+**Status:** 🟡 the matrix export is done (see 3.6a). The in-app "below X%" list is not done yet.
+
+### 3.6a Subject attendance export and session names ✅
+**Status:** ✅ implemented.
+- **Session names (DB v3, `sessions.title`):** the start-session dialog asks for **اسم الجلسة**, pre-filled with "محاضرة N". Sessions can be renamed from their details screen. Older sessions show their date until renamed. Lists show the session name, and the all-sessions screen also shows the subject.
+- **Subject export:** the subject screen's **تصدير الحضور** button creates `Attendance_<subject>_All_<date>.xlsx` (built by `ExcelService.exportSubjectAttendanceToExcel`), with:
+  - one row per student who attended at least one session of the subject;
+  - one column per session, oldest first, headed by the session name with its date underneath;
+  - ✓/✗ cells;
+  - each student's count (`7/10`) and percentage;
+  - a bottom row with each session's present count.
+- The student number column uses the real university number (avoids 1.2 for this export).
+- The per-session export now also includes a `الجلسة:` row.
 
 ### 3.7 Late arrivals
 Add an optional "late after N minutes" threshold per session. Mark scans after the threshold as *Late* in the UI and in the export.
@@ -359,7 +373,7 @@ Services create their dependencies directly (`DatabaseHelper.instance`, `ExcelSe
 
 [test/widget_test.dart](test/widget_test.dart) only checks `1 + 1 == 2`. Suggested coverage, in order of value:
 
-1. **Unit tests**: `Validators`, `AppConstants.getExportFileName` (Arabic course names: the current regex `[^\w\s-]` removes **all Arabic characters**, so an Arabic course gives `Attendance__20261001_0900.xlsx`. Fix that with a Unicode-aware regex too.)
+1. **Unit tests**: `Validators`, `AppConstants.getExportFileName` (✅ the Arabic-name bug is fixed: file names now only drop characters invalid on file systems, so Arabic subject names survive. A test should lock this in.)
 2. **Excel import tests**: parse fixture `.xlsx` files (valid, missing columns, duplicates, numeric cells, blank rows).
 3. **DB tests** with `sqflite_common_ffi` (in-memory): scan flow, duplicate scan, unknown code, delete cascade, migrations.
 4. **Widget tests**: home screen states (no session / active session), with providers overridden by fakes.

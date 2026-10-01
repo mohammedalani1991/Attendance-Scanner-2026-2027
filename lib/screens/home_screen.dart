@@ -137,7 +137,7 @@ class HomeScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  session.courseName,
+                  '${session.courseName} — ${session.displayName}',
                   style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,

@@ -8,7 +8,14 @@ import '../screens/session_detail_screen.dart';
 class SessionListTile extends ConsumerWidget {
   final Session session;
 
-  const SessionListTile({super.key, required this.session});
+  /// Show the subject name in the subtitle (for lists that mix subjects)
+  final bool showSubject;
+
+  const SessionListTile({
+    super.key,
+    required this.session,
+    this.showSubject = false,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -32,8 +39,12 @@ class SessionListTile extends ConsumerWidget {
             session.isActive ? Icons.circle : Icons.check_circle,
             color: session.isActive ? Colors.green : Colors.grey,
           ),
-          title: Text(session.courseName),
-          subtitle: Text(formatSessionDateTime(session.timestampStart)),
+          title: Text(session.displayName),
+          subtitle: Text(
+            showSubject
+                ? '${session.courseName} • ${formatSessionDateTime(session.timestampStart)}'
+                : formatSessionDateTime(session.timestampStart),
+          ),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => _openDetails(context, ref),
         ),
@@ -47,7 +58,7 @@ class SessionListTile extends ConsumerWidget {
       builder: (context) => AlertDialog(
         title: const Text('حذف الجلسة'),
         content: Text(
-          'هل أنت متأكد من حذف "${session.courseName}"؟\n\n'
+          'هل أنت متأكد من حذف "${session.displayName}" (${session.courseName})؟\n\n'
           'سيؤدي هذا إلى حذف الجلسة وجميع سجلات الحضور الخاصة بها نهائيًا.',
         ),
         actions: [

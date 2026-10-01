@@ -27,6 +27,7 @@ class SessionService {
   /// Start a new session under a subject
   Future<SessionOperationResult> startSession({
     required Subject subject,
+    required String title,
     String? notes,
   }) async {
     try {
@@ -42,6 +43,7 @@ class SessionService {
       // Create new session
       final session = Session(
         subjectId: subject.id,
+        title: title,
         courseName: subject.name,
         notes: notes,
       );
@@ -75,6 +77,39 @@ class SessionService {
     } catch (e) {
       return SessionOperationResult.error('فشل إنهاء الجلسة: $e');
     }
+  }
+
+  /// Rename a session; returns false if it failed
+  Future<bool> renameSession(int sessionId, String title) async {
+    try {
+      await _dbHelper.updateSessionTitle(sessionId, title);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Export every session of a subject to one Excel file and return its path
+  Future<String> exportSubjectAttendance(int subjectId) async {
+    final subject = await _dbHelper.getSubjectById(subjectId);
+    if (subject == null) {
+      throw Exception('المادة غير موجودة');
+    }
+
+    final sessions = await _dbHelper.getSessionsBySubject(subjectId);
+    if (sessions.isEmpty) {
+      throw Exception('لا توجد جلسات لهذه المادة');
+    }
+
+    final records = await _dbHelper.getAttendanceRecordsBySubject(subjectId);
+    final students = await _dbHelper.getAllStudents();
+
+    return _excelService.exportSubjectAttendanceToExcel(
+      subject: subject,
+      sessions: sessions,
+      records: records,
+      studentsById: {for (final student in students) student.id!: student},
+    );
   }
 
   /// Reopen an ended session so scanning can continue in it

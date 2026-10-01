@@ -55,6 +55,7 @@ class DatabaseHelper {
       CREATE TABLE ${AppConstants.sessionsTable} (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         subject_id INTEGER REFERENCES ${AppConstants.subjectsTable} (id),
+        title TEXT,
         course_name TEXT NOT NULL,
         timestamp_start TEXT NOT NULL,
         timestamp_end TEXT,
@@ -131,6 +132,12 @@ class DatabaseHelper {
           whereArgs: [name],
         );
       }
+    }
+
+    if (oldVersion < 3) {
+      // v3: session names; old sessions keep NULL and display their date
+      await db.execute(
+          'ALTER TABLE ${AppConstants.sessionsTable} ADD COLUMN title TEXT');
     }
   }
 
@@ -372,6 +379,42 @@ class DatabaseHelper {
     return endedSession;
   }
 
+  /// Rename a session
+  Future<void> updateSessionTitle(int sessionId, String title) async {
+    final db = await database;
+    await db.update(
+      AppConstants.sessionsTable,
+      {'title': title},
+      where: 'id = ?',
+      whereArgs: [sessionId],
+    );
+  }
+
+  /// Get a subject's sessions, oldest first
+  Future<List<Session>> getSessionsBySubject(int subjectId) async {
+    final db = await database;
+    final maps = await db.query(
+      AppConstants.sessionsTable,
+      where: 'subject_id = ?',
+      whereArgs: [subjectId],
+      orderBy: 'timestamp_start ASC',
+    );
+    return maps.map(Session.fromMap).toList();
+  }
+
+  /// Get a subject by ID
+  Future<Subject?> getSubjectById(int id) async {
+    final db = await database;
+    final maps = await db.query(
+      AppConstants.subjectsTable,
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (maps.isEmpty) return null;
+    return Subject.fromMap(maps.first);
+  }
+
   /// Reopen an ended session (clears its end time)
   Future<Session?> resumeSession(int sessionId) async {
     final db = await database;
@@ -419,6 +462,18 @@ class DatabaseHelper {
       orderBy: 'timestamp_scan ASC',
     );
     return List.generate(maps.length, (i) => AttendanceRecord.fromMap(maps[i]));
+  }
+
+  /// Get every attendance record from all sessions of a subject
+  Future<List<AttendanceRecord>> getAttendanceRecordsBySubject(
+      int subjectId) async {
+    final db = await database;
+    final maps = await db.rawQuery('''
+      SELECT ar.* FROM ${AppConstants.attendanceRecordsTable} ar
+      JOIN ${AppConstants.sessionsTable} s ON s.id = ar.session_id
+      WHERE s.subject_id = ?
+    ''', [subjectId]);
+    return maps.map(AttendanceRecord.fromMap).toList();
   }
 
   /// Check if student attended a session

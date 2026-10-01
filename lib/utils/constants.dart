@@ -2,9 +2,11 @@
 class AppConstants {
   // Database
   static const String databaseName = 'attendance_scanner.db';
-  static const int databaseVersion = 1;
+  // v2: subjects table, sessions.subject_id
+  static const int databaseVersion = 2;
 
   // Table names
+  static const String subjectsTable = 'subjects';
   static const String studentsTable = 'students';
   static const String sessionsTable = 'sessions';
   static const String attendanceRecordsTable = 'attendance_records';

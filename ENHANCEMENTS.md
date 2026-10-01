@@ -159,8 +159,18 @@ Expected result: about one student per 1–1.5 s, and it also fixes 1.7 (the rep
 ### 3.1 Absent students in the export *(high value)*
 The export lists only students who were present. Lecturers usually need the full roster with a **Present / Absent** column, plus a summary (present count, absent count, rate). `SessionService.getSessionStats` already computes the rate but nothing uses it.
 
-### 3.2 Subjects with their own sessions and rosters
+### 3.2 Subjects with their own sessions and rosters 🟡
 This is the biggest structural improvement for real use.
+
+**Status:** 🟡 partly implemented.
+- ✅ **Done:**
+  - `subjects` table and `sessions.subject_id` (DB v2, with a migration that turns each existing course name into a subject).
+  - The home screen lists subjects with a **＋ إضافة مادة** button.
+  - The new [subject_screen.dart](lib/screens/subject_screen.dart) lists the subject's sessions and has **بدء جلسة** (start session), edit subject and delete subject.
+  - A session can only be created inside a subject.
+- ⏳ **Not yet:**
+  - Per-subject rosters (`subject_students`, importing into a subject, "not enrolled" handling). Students are still one shared list.
+  - Archiving instead of deleting.
 
 **Problem today:**
 - The course is free text typed each time a session starts, so a typo like "CS101" vs "CS 101" splits the history.
@@ -235,6 +245,13 @@ In `_upgradeDB` (`oldVersion < 2`), inside one transaction:
 - A clean home screen with no limit on visible history (4.4)
 
 **Effort:** medium to high. Do it together with the DB v2 migration in step 3 of the work order, so users go through only one schema upgrade.
+
+### 3.2a Resume a completed session ✅
+**Status:** ✅ implemented. The session details screen of a completed session has a **استئناف الجلسة** (resume session) button.
+- It asks for confirmation first, then clears the session's end time so it becomes the active session again.
+- Students already recorded stay recorded.
+- It is refused while another session is active, the same rule as starting a session.
+- When the session is ended again, it gets the new end time. The shown duration then counts from the original start, including the gap.
 
 ### 3.3 Manual attendance & corrections
 - Mark a student present by searching for their name (forgotten card, damaged code). [Plan.md](Plan.md#L23) mentions this ("allow manual lookup/registration").

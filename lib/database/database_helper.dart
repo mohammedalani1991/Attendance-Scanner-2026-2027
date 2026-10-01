@@ -2,6 +2,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/student.dart';
 import '../models/session.dart';
+import '../models/subject.dart';
 import '../models/attendance_record.dart';
 import '../utils/constants.dart';
 
@@ -34,6 +35,9 @@ class DatabaseHelper {
 
   /// Create database tables
   Future<void> _createDB(Database db, int version) async {
+    // Subjects table
+    await _createSubjectsTable(db);
+
     // Students table
     await db.execute('''
       CREATE TABLE ${AppConstants.studentsTable} (
@@ -50,6 +54,7 @@ class DatabaseHelper {
     await db.execute('''
       CREATE TABLE ${AppConstants.sessionsTable} (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        subject_id INTEGER REFERENCES ${AppConstants.subjectsTable} (id),
         course_name TEXT NOT NULL,
         timestamp_start TEXT NOT NULL,
         timestamp_end TEXT,
@@ -82,11 +87,123 @@ class DatabaseHelper {
         'CREATE INDEX idx_attendance_session_id ON ${AppConstants.attendanceRecordsTable}(session_id)');
     await db.execute(
         'CREATE INDEX idx_sessions_timestamp_start ON ${AppConstants.sessionsTable}(timestamp_start)');
+    await db.execute(
+        'CREATE INDEX idx_sessions_subject_id ON ${AppConstants.sessionsTable}(subject_id)');
   }
 
-  /// Upgrade database (for future migrations)
+  Future<void> _createSubjectsTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE ${AppConstants.subjectsTable} (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        code TEXT,
+        created_at TEXT NOT NULL
+      )
+    ''');
+  }
+
+  /// Upgrade database (sqflite runs this inside a transaction)
   Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
-    // Handle database migrations here in future versions
+    if (oldVersion < 2) {
+      // v2: sessions belong to subjects
+      await _createSubjectsTable(db);
+      await db.execute(
+          'ALTER TABLE ${AppConstants.sessionsTable} ADD COLUMN subject_id INTEGER REFERENCES ${AppConstants.subjectsTable} (id)');
+      await db.execute(
+          'CREATE INDEX idx_sessions_subject_id ON ${AppConstants.sessionsTable}(subject_id)');
+
+      // Turn each existing course name into a subject so old sessions keep their history
+      final courses = await db.rawQuery('''
+        SELECT TRIM(course_name) AS name, MIN(created_at) AS created_at
+        FROM ${AppConstants.sessionsTable}
+        GROUP BY TRIM(course_name)
+      ''');
+      for (final course in courses) {
+        final name = course['name'] as String;
+        final subjectId = await db.insert(AppConstants.subjectsTable, {
+          'name': name,
+          'created_at': course['created_at'] as String,
+        });
+        await db.update(
+          AppConstants.sessionsTable,
+          {'subject_id': subjectId, 'course_name': name},
+          where: 'TRIM(course_name) = ?',
+          whereArgs: [name],
+        );
+      }
+    }
+  }
+
+  // ==================== SUBJECT OPERATIONS ====================
+
+  /// Insert a subject
+  Future<Subject> insertSubject(Subject subject) async {
+    final db = await database;
+    final id = await db.insert(AppConstants.subjectsTable, subject.toMap());
+    return subject.copyWith(id: id);
+  }
+
+  /// Get all subjects (alphabetical)
+  Future<List<Subject>> getAllSubjects() async {
+    final db = await database;
+    final maps = await db.query(
+      AppConstants.subjectsTable,
+      orderBy: 'name COLLATE NOCASE ASC',
+    );
+    return maps.map(Subject.fromMap).toList();
+  }
+
+  /// Check if another subject already uses this name (case-insensitive)
+  Future<bool> subjectNameExists(String name, {int? excludeId}) async {
+    final db = await database;
+    final count = Sqflite.firstIntValue(await db.rawQuery(
+      'SELECT COUNT(*) FROM ${AppConstants.subjectsTable} '
+      'WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) AND id != ?',
+      [name, excludeId ?? -1],
+    ));
+    return (count ?? 0) > 0;
+  }
+
+  /// Rename a subject and keep its sessions' course name in sync (used in exports)
+  Future<void> updateSubject(Subject subject) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      await txn.update(
+        AppConstants.subjectsTable,
+        subject.toMap(),
+        where: 'id = ?',
+        whereArgs: [subject.id],
+      );
+      await txn.update(
+        AppConstants.sessionsTable,
+        {'course_name': subject.name},
+        where: 'subject_id = ?',
+        whereArgs: [subject.id],
+      );
+    });
+  }
+
+  /// Delete a subject with all its sessions and their attendance records
+  Future<void> deleteSubjectWithSessions(int subjectId) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      await txn.delete(
+        AppConstants.attendanceRecordsTable,
+        where:
+            'session_id IN (SELECT id FROM ${AppConstants.sessionsTable} WHERE subject_id = ?)',
+        whereArgs: [subjectId],
+      );
+      await txn.delete(
+        AppConstants.sessionsTable,
+        where: 'subject_id = ?',
+        whereArgs: [subjectId],
+      );
+      await txn.delete(
+        AppConstants.subjectsTable,
+        where: 'id = ?',
+        whereArgs: [subjectId],
+      );
+    });
   }
 
   // ==================== STUDENT OPERATIONS ====================
@@ -253,6 +370,18 @@ class DatabaseHelper {
     final endedSession = session.end();
     await updateSession(endedSession);
     return endedSession;
+  }
+
+  /// Reopen an ended session (clears its end time)
+  Future<Session?> resumeSession(int sessionId) async {
+    final db = await database;
+    await db.update(
+      AppConstants.sessionsTable,
+      {'timestamp_end': null},
+      where: 'id = ?',
+      whereArgs: [sessionId],
+    );
+    return getSessionById(sessionId);
   }
 
   /// Delete a session

@@ -1,25 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/session.dart';
+import '../models/subject.dart';
 import '../providers/session_provider.dart';
 import '../providers/student_provider.dart';
+import '../providers/subject_provider.dart';
 import '../widgets/session_list_tile.dart';
+import '../widgets/subject_form_dialog.dart';
 import 'all_sessions_screen.dart';
 import 'import_students_screen.dart';
 import 'scanner_screen.dart';
 import 'session_detail_screen.dart';
+import 'subject_screen.dart';
 
 /// Home dashboard screen - main entry point of the app
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
-
-  /// Number of sessions shown on the dashboard before "view all"
-  static const int _recentSessionsLimit = 5;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final activeSession = ref.watch(activeSessionProvider);
     final sessions = ref.watch(sessionsProvider);
     final students = ref.watch(studentsProvider);
+    final subjects = ref.watch(subjectsProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -32,6 +35,7 @@ class HomeScreen extends ConsumerWidget {
               ref.read(activeSessionProvider.notifier).loadActiveSession();
               ref.read(sessionsProvider.notifier).loadSessions();
               ref.read(studentsProvider.notifier).loadStudents();
+              ref.read(subjectsProvider.notifier).loadSubjects();
             },
             tooltip: 'تحديث',
           ),
@@ -51,11 +55,11 @@ class HomeScreen extends ConsumerWidget {
             const SizedBox(height: 24),
 
             // Statistics
-            _buildStatistics(students, sessions),
+            _buildStatistics(students, subjects, sessions),
             const SizedBox(height: 24),
 
-            // Recent sessions
-            _buildRecentSessions(context, ref, sessions),
+            // Subjects (sessions are created inside a subject)
+            _buildSubjects(context, ref, subjects, sessions, activeSession),
           ],
         ),
       ),
@@ -70,7 +74,11 @@ class HomeScreen extends ConsumerWidget {
               icon: const Icon(Icons.qr_code_scanner),
               label: const Text('مسح'),
             )
-          : null,
+          : FloatingActionButton.extended(
+              onPressed: () => _addSubject(context, ref),
+              icon: const Icon(Icons.add),
+              label: const Text('إضافة مادة'),
+            ),
     );
   }
 
@@ -82,26 +90,23 @@ class HomeScreen extends ConsumerWidget {
     return activeSession.when(
       data: (session) {
         if (session == null) {
-          return Card(
+          return const Card(
             child: Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: EdgeInsets.all(16.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'لا توجد جلسة نشطة',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  const Text('ابدأ جلسة جديدة لبدء تسجيل الحضور.'),
-                  const SizedBox(height: 16),
-                  ElevatedButton.icon(
-                    onPressed: () => _showStartSessionDialog(context, ref),
-                    icon: const Icon(Icons.play_arrow),
-                    label: const Text('بدء جلسة'),
+                  SizedBox(height: 8),
+                  Text(
+                    'لبدء تسجيل الحضور، اختر مادة من القائمة أدناه ثم اضغط "بدء جلسة". '
+                    'إذا لم تكن هناك مواد، أضف مادة أولاً.',
                   ),
                 ],
               ),
@@ -319,12 +324,10 @@ class HomeScreen extends ConsumerWidget {
   }
 
   Widget _buildStatistics(
-    AsyncValue<dynamic> students,
-    AsyncValue<dynamic> sessions,
+    AsyncValue<List<dynamic>> students,
+    AsyncValue<List<Subject>> subjects,
+    AsyncValue<List<Session>> sessions,
   ) {
-    final studentCount = students.value?.length ?? 0;
-    final sessionCount = sessions.value?.length ?? 0;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -338,97 +341,151 @@ class HomeScreen extends ConsumerWidget {
         const SizedBox(height: 12),
         Row(
           children: [
-            Expanded(
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    children: [
-                      const Icon(Icons.people, size: 36),
-                      const SizedBox(height: 8),
-                      Text(
-                        '$studentCount',
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const Text('الطلاب'),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+            _buildStatCard(Icons.people, students.value?.length ?? 0, 'الطلاب'),
             const SizedBox(width: 12),
-            Expanded(
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    children: [
-                      const Icon(Icons.event, size: 36),
-                      const SizedBox(height: 8),
-                      Text(
-                        '$sessionCount',
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const Text('الجلسات'),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+            _buildStatCard(
+                Icons.menu_book, subjects.value?.length ?? 0, 'المواد'),
+            const SizedBox(width: 12),
+            _buildStatCard(Icons.event, sessions.value?.length ?? 0, 'الجلسات'),
           ],
         ),
       ],
     );
   }
 
-  Widget _buildRecentSessions(
+  Widget _buildStatCard(IconData icon, int count, String label) {
+    return Expanded(
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 8.0),
+          child: Column(
+            children: [
+              Icon(icon, size: 32),
+              const SizedBox(height: 8),
+              Text(
+                '$count',
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(label),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSubjects(
     BuildContext context,
     WidgetRef ref,
-    AsyncValue<dynamic> sessions,
+    AsyncValue<List<Subject>> subjects,
+    AsyncValue<List<Session>> sessions,
+    AsyncValue<Session?> activeSession,
   ) {
+    final sessionList = sessions.value ?? const <Session>[];
+    final activeSubjectId = activeSession.value?.subjectId;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'الجلسات الأخيرة',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'المواد',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: () => _addSubject(context, ref),
+              icon: const Icon(Icons.add),
+              label: const Text('إضافة مادة'),
+            ),
+          ],
         ),
-        const SizedBox(height: 12),
-        sessions.when(
-          data: (sessionList) {
-            if (sessionList.isEmpty) {
-              return const Card(
+        const SizedBox(height: 8),
+        subjects.when(
+          data: (subjectList) {
+            if (subjectList.isEmpty) {
+              return Card(
                 child: Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: Center(
-                    child: Text('لا توجد جلسات بعد'),
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    children: [
+                      const Icon(Icons.menu_book, size: 48, color: Colors.grey),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'لا توجد مواد بعد.\nأضف مادة أولاً، ثم أنشئ الجلسات بداخلها.',
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: () => _addSubject(context, ref),
+                        icon: const Icon(Icons.add),
+                        label: const Text('إضافة مادة'),
+                      ),
+                    ],
                   ),
                 ),
               );
             }
 
-            final recentSessions = sessionList.take(_recentSessionsLimit).toList();
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: recentSessions.length,
-                  itemBuilder: (context, index) =>
-                      SessionListTile(session: recentSessions[index]),
-                ),
-                // Older sessions are only reachable from the full list
-                if (sessionList.length > _recentSessionsLimit)
+                ...subjectList.map((subject) {
+                  final subjectSessions = sessionList
+                      .where((session) => session.subjectId == subject.id)
+                      .toList();
+                  final isActive = subject.id == activeSubjectId;
+                  final lastSession =
+                      subjectSessions.isEmpty ? null : subjectSessions.first;
+
+                  return Card(
+                    color: isActive ? Colors.green.shade50 : null,
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor:
+                            isActive ? Colors.green : Colors.blue.shade100,
+                        child: Icon(
+                          isActive ? Icons.play_arrow : Icons.menu_book,
+                          color: isActive ? Colors.white : Colors.blue.shade800,
+                        ),
+                      ),
+                      title: Text(
+                        subject.code == null
+                            ? subject.name
+                            : '${subject.name} (${subject.code})',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      subtitle: Text(
+                        isActive
+                            ? 'جلسة نشطة الآن • ${subjectSessions.length} جلسة'
+                            : lastSession == null
+                                ? 'لا توجد جلسات بعد'
+                                : '${subjectSessions.length} جلسة • آخر جلسة: '
+                                    '${formatSessionDateTime(lastSession.timestampStart)}',
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                SubjectScreen(subjectId: subject.id!),
+                          ),
+                        );
+                      },
+                    ),
+                  );
+                }),
+                // Every session across all subjects, with search and date filter
+                if (sessionList.isNotEmpty)
                   TextButton.icon(
                     onPressed: () {
                       Navigator.push(
@@ -451,85 +508,20 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  void _showStartSessionDialog(BuildContext context, WidgetRef ref) {
-    final courseNameController = TextEditingController();
-    final notesController = TextEditingController();
+  Future<void> _addSubject(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final values = await showSubjectFormDialog(context);
+    if (values == null) return;
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('بدء جلسة جديدة'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: courseNameController,
-              decoration: const InputDecoration(
-                labelText: 'اسم المقرر',
-                hintText: 'مثال: علوم الحاسب 101',
-              ),
-              autofocus: true,
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: notesController,
-              decoration: const InputDecoration(
-                labelText: 'ملاحظات (اختياري)',
-                hintText: 'مثال: اختبار نصفي',
-              ),
-              maxLines: 2,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('إلغاء'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (courseNameController.text.trim().isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('الرجاء إدخال اسم المقرر')),
-                );
-                return;
-              }
+    final error = await ref
+        .read(subjectsProvider.notifier)
+        .addSubject(name: values.name, code: values.code);
 
-              final result = await ref
-                  .read(activeSessionProvider.notifier)
-                  .startSession(
-                    courseName: courseNameController.text.trim(),
-                    notes: notesController.text.trim().isEmpty
-                        ? null
-                        : notesController.text.trim(),
-                  );
-
-              if (context.mounted) {
-                final messenger = ScaffoldMessenger.of(context);
-                Navigator.pop(context);
-                if (result.success) {
-                  ref.read(sessionsProvider.notifier).loadSessions();
-                  messenger.showSnackBar(
-                    const SnackBar(content: Text('تم بدء الجلسة بنجاح')),
-                  );
-                } else {
-                  messenger.showSnackBar(
-                    SnackBar(
-                      content: Text(result.errorMessage ?? 'فشل بدء الجلسة'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              }
-            },
-            child: const Text('بدء'),
-          ),
-        ],
-      ),
-    ).then((_) {
-      courseNameController.dispose();
-      notesController.dispose();
-    });
+    messenger.showSnackBar(
+      error == null
+          ? SnackBar(content: Text('تمت إضافة المادة "${values.name}"'))
+          : SnackBar(content: Text(error), backgroundColor: Colors.red),
+    );
   }
 
   void _showEndSessionDialog(BuildContext context, WidgetRef ref) {

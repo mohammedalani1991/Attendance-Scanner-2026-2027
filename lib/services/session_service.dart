@@ -1,4 +1,5 @@
 import '../models/session.dart';
+import '../models/subject.dart';
 import '../models/attendance_record.dart';
 import '../database/database_helper.dart';
 import 'excel_service.dart';
@@ -23,9 +24,9 @@ class SessionService {
   final DatabaseHelper _dbHelper = DatabaseHelper.instance;
   final ExcelService _excelService = ExcelService();
 
-  /// Start a new session
+  /// Start a new session under a subject
   Future<SessionOperationResult> startSession({
-    required String courseName,
+    required Subject subject,
     String? notes,
   }) async {
     try {
@@ -40,7 +41,8 @@ class SessionService {
 
       // Create new session
       final session = Session(
-        courseName: courseName,
+        subjectId: subject.id,
+        courseName: subject.name,
         notes: notes,
       );
 
@@ -72,6 +74,34 @@ class SessionService {
       return SessionOperationResult.success(endedSession);
     } catch (e) {
       return SessionOperationResult.error('فشل إنهاء الجلسة: $e');
+    }
+  }
+
+  /// Reopen an ended session so scanning can continue in it
+  Future<SessionOperationResult> resumeSession(int sessionId) async {
+    try {
+      final session = await _dbHelper.getSessionById(sessionId);
+      if (session == null) {
+        return SessionOperationResult.error('الجلسة غير موجودة');
+      }
+
+      if (session.isActive) {
+        return SessionOperationResult.error('الجلسة نشطة بالفعل');
+      }
+
+      // Only one session can be active at a time
+      final activeSession = await _dbHelper.getActiveSession();
+      if (activeSession != null) {
+        return SessionOperationResult.error(
+          'توجد جلسة نشطة بالفعل: ${activeSession.courseName}. '
+          'الرجاء إنهاؤها قبل استئناف هذه الجلسة.',
+        );
+      }
+
+      final resumedSession = await _dbHelper.resumeSession(sessionId);
+      return SessionOperationResult.success(resumedSession);
+    } catch (e) {
+      return SessionOperationResult.error('فشل استئناف الجلسة: $e');
     }
   }
 

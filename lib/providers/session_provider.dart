@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/session.dart';
+import '../models/subject.dart';
 import '../models/attendance_record.dart';
 import '../services/session_service.dart';
 
@@ -46,14 +47,14 @@ class ActiveSessionNotifier extends StateNotifier<AsyncValue<Session?>> {
     }
   }
 
-  /// Start a new session (the result carries the error message on failure)
+  /// Start a new session under a subject (the result carries the error message on failure)
   Future<SessionOperationResult> startSession({
-    required String courseName,
+    required Subject subject,
     String? notes,
   }) async {
     try {
       final result = await _sessionService.startSession(
-        courseName: courseName,
+        subject: subject,
         notes: notes,
       );
       if (result.success) {
@@ -80,6 +81,19 @@ class ActiveSessionNotifier extends StateNotifier<AsyncValue<Session?>> {
       return result;
     } catch (e) {
       return SessionOperationResult.error('فشل إنهاء الجلسة: $e');
+    }
+  }
+
+  /// Reopen an ended session and make it the active one
+  Future<SessionOperationResult> resumeSession(int sessionId) async {
+    try {
+      final result = await _sessionService.resumeSession(sessionId);
+      if (result.success) {
+        state = AsyncValue.data(result.session);
+      }
+      return result;
+    } catch (e) {
+      return SessionOperationResult.error('فشل استئناف الجلسة: $e');
     }
   }
 }

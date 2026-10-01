@@ -1,7 +1,8 @@
 /// Session model representing a lecture session
 class Session {
   final int? id; // Auto-increment primary key
-  final String courseName;
+  final int? subjectId; // Foreign key to subjects table
+  final String courseName; // Copy of the subject name, used in exports
   final DateTime timestampStart;
   final DateTime? timestampEnd; // Null if session is ongoing
   final String? notes; // Optional notes about the session
@@ -9,6 +10,7 @@ class Session {
 
   Session({
     this.id,
+    this.subjectId,
     required this.courseName,
     DateTime? timestampStart,
     this.timestampEnd,
@@ -30,6 +32,7 @@ class Session {
   Map<String, dynamic> toMap() {
     return {
       'id': id,
+      'subject_id': subjectId,
       'course_name': courseName,
       'timestamp_start': timestampStart.toIso8601String(),
       'timestamp_end': timestampEnd?.toIso8601String(),
@@ -42,6 +45,7 @@ class Session {
   factory Session.fromMap(Map<String, dynamic> map) {
     return Session(
       id: map['id'] as int?,
+      subjectId: map['subject_id'] as int?,
       courseName: map['course_name'] as String,
       timestampStart: DateTime.parse(map['timestamp_start'] as String),
       timestampEnd: map['timestamp_end'] != null
@@ -55,6 +59,7 @@ class Session {
   /// Copy with method for creating modified copies
   Session copyWith({
     int? id,
+    int? subjectId,
     String? courseName,
     DateTime? timestampStart,
     DateTime? timestampEnd,
@@ -63,6 +68,7 @@ class Session {
   }) {
     return Session(
       id: id ?? this.id,
+      subjectId: subjectId ?? this.subjectId,
       courseName: courseName ?? this.courseName,
       timestampStart: timestampStart ?? this.timestampStart,
       timestampEnd: timestampEnd ?? this.timestampEnd,
@@ -87,6 +93,7 @@ class Session {
 
     return other is Session &&
         other.id == id &&
+        other.subjectId == subjectId &&
         other.courseName == courseName &&
         other.timestampStart == timestampStart &&
         other.timestampEnd == timestampEnd &&

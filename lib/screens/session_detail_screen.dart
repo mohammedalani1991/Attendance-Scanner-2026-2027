@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import '../models/session.dart';
 import '../models/attendance_record.dart';
 import '../services/session_service.dart';
+import '../providers/session_provider.dart';
+import 'scanner_screen.dart';
 
 /// Screen showing details of a specific session
 class SessionDetailScreen extends ConsumerStatefulWidget {
@@ -25,6 +27,7 @@ class _SessionDetailScreenState extends ConsumerState<SessionDetailScreen> {
   List<AttendanceRecord> _attendanceRecords = [];
   bool _isLoading = true;
   bool _isExporting = false;
+  bool _isResuming = false;
 
   @override
   void initState() {
@@ -217,6 +220,24 @@ class _SessionDetailScreenState extends ConsumerState<SessionDetailScreen> {
                 session.notes!,
               ),
             ],
+            // A completed session can be reopened to continue scanning
+            if (!session.isActive) ...[
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _isResuming ? null : _confirmResumeSession,
+                  icon: _isResuming
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.play_arrow),
+                  label: const Text('استئناف الجلسة'),
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -392,6 +413,68 @@ class _SessionDetailScreenState extends ConsumerState<SessionDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('فشل التصدير: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _confirmResumeSession() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('استئناف الجلسة'),
+        content: Text(
+          'هل تريد إعادة فتح جلسة "${_session!.courseName}"؟\n\n'
+          'ستصبح الجلسة النشطة، ويمكنك متابعة مسح الحضور فيها. '
+          'الطلاب المسجلون سابقاً يبقون مسجلين.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('إلغاء'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('استئناف'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isResuming = true);
+    final result = await ref
+        .read(activeSessionProvider.notifier)
+        .resumeSession(widget.sessionId);
+    if (!mounted) return;
+    setState(() => _isResuming = false);
+
+    if (result.success) {
+      ref.read(sessionsProvider.notifier).loadSessions();
+      await _loadSessionData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('تم استئناف الجلسة'),
+          backgroundColor: Colors.green,
+          action: SnackBarAction(
+            label: 'مسح',
+            textColor: Colors.white,
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ScannerScreen()),
+              );
+            },
+          ),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.errorMessage ?? 'فشل استئناف الجلسة'),
           backgroundColor: Colors.red,
         ),
       );
